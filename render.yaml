@@ -1,0 +1,30 @@
+# One-click deploy on Render (render.com -> New -> Blueprint -> pick this repo).
+services:
+  - type: web
+    name: voice-receptionist
+    runtime: node
+    rootDir: voice-receptionist
+    plan: starter
+    buildCommand: npm ci --omit=dev
+    startCommand: node src/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: DATA_DIR
+        value: /var/data
+      # Paste the one-line JSON that "npm run setup" prints.
+      - key: BUSINESSES_JSON
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: ADMIN_PASSWORD
+        generateValue: true
+      - key: APP_SECRET
+        generateValue: true
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1

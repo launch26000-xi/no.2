@@ -1,0 +1,31 @@
+{
+  "businesses": [
+    {
+      "id": "acme-plumbing",
+      "name": "Acme Plumbing",
+      "industry": "plumbing",
+      "owner_name": "Mike",
+      "twilio_number": "+13035550100",
+      "alert_numbers": ["+13035550199"],
+      "contacts": [
+        { "name": "Mike", "role": "owner", "phone": "+13035550199", "when": "it's an emergency (active leak, sewage backup, no water) or an existing customer with a job in progress" },
+        { "name": "Sarah", "role": "office manager", "phone": "+13035550198", "when": "billing questions, invoices, or payments" }
+      ],
+      "service_area": "Denver, Aurora, Lakewood, and Littleton",
+      "hours": "Mon-Fri 7am-6pm, Sat 8am-noon. Emergency service 24/7.",
+      "timezone": "America/Denver",
+      "services": ["Drain cleaning", "Water heater repair and replacement", "Leak repair", "Sewer camera inspection", "Fixture installs"],
+      "pricing_notes": "Service call is $89, waived if we do the repair. Drain cleaning starts at $149. After-hours emergency fee is $150.",
+      "booking_policy": "Take the caller's preferred day and a morning (8-12) or afternoon (12-5) window. The office confirms by text within the hour during business hours, first thing next morning otherwise. Emergencies get transferred to Mike.",
+      "booking_link": "",
+      "website": "",
+      "faq": [
+        { "q": "Do you offer financing?", "a": "Yes, for water heaters and bigger jobs; the technician can go over options on site." },
+        { "q": "Are you licensed and insured?", "a": "Yes, fully licensed and insured in Colorado." }
+      ],
+      "greeting": "",
+      "missed_call_textback": true,
+      "billing": { "monthly_fee": 297, "per_booked_job": 25, "per_qualified_lead": 10 }
+    }
+  ]
+}

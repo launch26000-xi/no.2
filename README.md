@@ -30,3 +30,6 @@ in the `admins` collection whose ID is the member's user ID.
 - `for-jason/No2-Check-My-Work.pdf`
 
 When updating app files, bump `VERSION` in `sw.js` so phones pick up the new version.
+
+## Also in this repo
+- `voice-receptionist/` — AI phone receptionist for trade businesses (answers calls, books jobs, texts, transfers, billable transcripts). See `voice-receptionist/README.md` and `voice-receptionist/STRATEGY.md`.
