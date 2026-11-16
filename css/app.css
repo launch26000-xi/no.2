@@ -371,3 +371,4 @@ footer.foot { text-align: center; font-size: .85rem; color: var(--ink-soft); pad
 .sc-i { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: .8rem; font-weight: 700; color: #fff; background: var(--good); }
 .sc-warn .sc-i { background: #B07800; }
 .sc-fail .sc-i { background: var(--red); }
+.sc-fixed .sc-i { background: var(--navy); }

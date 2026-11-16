@@ -1,0 +1,28 @@
+# Sentry runs No2's full self-check on GitHub's computers: on every push, every pull request,
+# every day at 7:17 a.m. Colorado time, and whenever you press "Run workflow".
+# It opens every screen, presses every safe button, checks every link and file, and proves
+# self-repair works. If anything breaks, this run turns red and GitHub emails you.
+name: Sentry
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '17 13 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sentry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install a headless phone browser
+        run: |
+          npm install --no-save playwright@1.49.1
+          npx playwright install --with-deps chromium
+      - name: Run Sentry
+        run: node tests/sentry.cjs

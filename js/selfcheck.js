@@ -1,4 +1,4 @@
-/* Colorado No2 — Self-Check and Guide.
+/* Colorado No2 — SENTRY: the self-check, self-repair and on-screen guide.
    Works like the computer in a car: every time No2 opens it checks itself in the background,
    and the Systems Check screen drives every screen, taps every safe button, follows every link
    and reports back in plain words. The guide strip above each screen explains what that screen
@@ -33,7 +33,7 @@ export const SCREENS = {
   account: ['My Account', 'Sign in, pick a nickname, set your area, see your ratings.'],
   admin: ['No2 Staff', 'Staff only: verify members, read sponsor requests, add events.'],
   settings: ['Settings', 'Install No2 on your home screen and clear saved choices.'],
-  check: ['Systems Check', 'No2 tests itself: every screen, button, link, file and answer.'],
+  check: ['Sentry', 'No2’s self-check: it tests every screen, button, link, file and answer, and fixes what it can.'],
 };
 const screenName = (hash) => (hash.replace(/^#\/?/, '').split(/[/?]/)[0] || 'foundation');
 
@@ -69,6 +69,7 @@ export function describe(el) {
    ===================================================================== */
 let ctx = { routes: [], searchLibrary: null };
 const ok = (group, label, detail = '') => ({ group, label, status: 'ok', detail });
+const fixed = (group, label, detail) => ({ group, label, status: 'ok', fixed: true, detail: 'Fixed itself: ' + detail });
 const warn = (group, label, detail) => ({ group, label, status: 'warn', detail });
 const fail = (group, label, detail) => ({ group, label, status: 'fail', detail });
 const isHttps = (u) => /^https:\/\/[^\s]+\.[^\s]+/.test(u || '');
@@ -90,21 +91,45 @@ async function quickChecks() {
   out.push(navigator.onLine ? ok('Phone', 'Internet connection') : warn('Phone', 'Internet connection', 'Offline right now. Saved screens still work; member features need signal.'));
   const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   out.push(standalone ? ok('Phone', 'Installed on the home screen') : warn('Phone', 'Installed on the home screen', 'Running in the browser. Open Settings → Install No2 to put it on your home screen.'));
-  out.push(document.fonts && document.fonts.check("700 20px 'No2 Stencil'") ? ok('Phone', 'No2 fonts loaded') : warn('Phone', 'No2 fonts loaded', 'The stencil font hasn’t finished loading yet. Text still shows in a backup font.'));
+  // Fonts: if not loaded yet, load them now
+  let fontOk = document.fonts ? document.fonts.check("700 20px 'No2 Stencil'") : true;
+  if (!fontOk) { await withTimeout(document.fonts.load("700 20px 'No2 Stencil'"), 2500).catch(() => null); fontOk = document.fonts.check("700 20px 'No2 Stencil'"); out.push(fontOk ? fixed('Phone', 'No2 fonts loaded', 'The stencil font was missing; Sentry loaded it.') : warn('Phone', 'No2 fonts loaded', 'The stencil font would not load. Text shows in a backup font.')); }
+  else out.push(ok('Phone', 'No2 fonts loaded'));
+  // Saved data: anything No2 saved that is corrupt gets removed
+  try {
+    const bad = Object.keys(localStorage).filter((k) => k.startsWith('no2.')).filter((k) => { try { JSON.parse(localStorage.getItem(k)); return false; } catch { return true; } });
+    bad.forEach((k) => localStorage.removeItem(k));
+    out.push(bad.length ? fixed('Phone', 'Saved data readable', `Removed ${bad.length} damaged saved setting${bad.length === 1 ? '' : 's'}.`) : ok('Phone', 'Saved data readable'));
+  } catch { /* storage blocked, reported above */ }
 
   // Offline engine
   let shell = { version: '', files: [] };
   try { shell = await withTimeout(readShellList(), 3000); out.push(shell.files.length ? ok('Offline', `Knows its own ${shell.files.length} app files`, `Version ${shell.version}`) : fail('Offline', 'Reads its own file list', 'Could not read the file list inside sw.js.')); } catch (e) { out.push(warn('Offline', 'Reads its own file list', `Could not read sw.js (${e.message}). Probably offline before the first full load.`)); }
-  if ('serviceWorker' in navigator) {
-    const reg = await navigator.serviceWorker.getRegistration().catch(() => null);
-    out.push(reg && reg.active ? ok('Offline', 'Offline helper running') : warn('Offline', 'Offline helper running', 'Not running yet. It starts after the first full load; reopen No2 once.'));
-    if (shell.version && 'caches' in window) {
-      const c = await caches.open(shell.version);
-      const missing = [];
-      for (const f of shell.files) if (!(await c.match(new URL(f, location.href).href, { ignoreSearch: true }))) missing.push(f);
-      out.push(!missing.length ? ok('Offline', 'Every app file saved for offline') : warn('Offline', 'Every app file saved for offline', `${missing.length} not saved yet: ${missing.slice(0, 4).join(', ')}${missing.length > 4 ? '…' : ''}. They save on the next load.`));
+  if ('serviceWorker' in navigator && !IN_TEST) {
+    let reg = await navigator.serviceWorker.getRegistration().catch(() => null);
+    if (reg && reg.active) out.push(ok('Offline', 'Offline helper running'));
+    else {
+      reg = await navigator.serviceWorker.register('sw.js').catch(() => null);
+      const ready = reg ? await withTimeout(navigator.serviceWorker.ready, 4000).catch(() => null) : null;
+      out.push(ready && ready.active ? fixed('Offline', 'Offline helper running', 'It was not running; Sentry started it.') : warn('Offline', 'Offline helper running', 'Could not start it yet. It starts after the first full load with signal.'));
     }
-  } else out.push(warn('Offline', 'Offline helper running', 'This browser has no offline support.'));
+    if (reg) reg.update().catch(() => {}); // pick up a new version if one is out
+    if (shell.version && 'caches' in window) {
+      // Old copies from earlier versions waste space: remove them
+      const old = (await caches.keys()).filter((k) => k.startsWith('no2-') && k !== shell.version);
+      await Promise.all(old.map((k) => caches.delete(k)));
+      if (old.length) out.push(fixed('Offline', 'No leftover old versions', `Deleted ${old.length} old saved cop${old.length === 1 ? 'y' : 'ies'} of No2.`));
+      const c = await caches.open(shell.version);
+      const missingNow = async () => { const m = []; for (const f of shell.files) if (!(await c.match(new URL(f, location.href).href, { ignoreSearch: true }))) m.push(f); return m; };
+      let missing = await missingNow();
+      if (!missing.length) out.push(ok('Offline', 'Every app file saved for offline'));
+      else if (navigator.onLine) {
+        await Promise.all(missing.map((f) => fetch(f, { cache: 'reload' }).then((r) => (r.ok ? c.put(new URL(f, location.href).href, r) : null)).catch(() => null)));
+        const before = missing.length; missing = await missingNow();
+        out.push(!missing.length ? fixed('Offline', 'Every app file saved for offline', `${before} file${before === 1 ? ' was' : 's were'} not saved; Sentry saved ${before === 1 ? 'it' : 'them'}.`) : fail('Offline', 'Every app file saved for offline', `Could not save: ${missing.join(', ')}. Those files may be missing from the website.`));
+      } else out.push(warn('Offline', 'Every app file saved for offline', `${missing.length} not saved yet. Sentry will save them next time there is signal.`));
+    }
+  } else if (!IN_TEST) out.push(warn('Offline', 'Offline helper running', 'This browser has no offline support.'));
 
   // Content
   const ids = new Set(); let badL = [];
@@ -286,7 +311,7 @@ function paintLight(res) {
   const a = $('#check-light'); if (!a) return;
   const k = res ? res.status : 'idle';
   a.querySelector('.dot').style.background = LIGHT[k][0];
-  a.setAttribute('aria-label', `Systems Check: ${LIGHT[k][1]}${res ? `, ${res.ok} of ${res.total} checks passed` : ''}`);
+  a.setAttribute('aria-label', `Sentry: ${LIGHT[k][1]}${res ? `, ${res.ok} of ${res.total} checks passed` : ''}`);
 }
 
 function paintGuide(justTapped) {
@@ -294,7 +319,7 @@ function paintGuide(justTapped) {
   const name = screenName(location.hash);
   const [title, line] = SCREENS[name] || ['This screen', ''];
   const ps = (lastResult() || {}).perScreen?.[name];
-  const tested = ps ? (ps.ok ? `✓ Self-check tested this screen: ${ps.pressed} buttons, ${ps.links} links.` : '✗ Self-check found a problem here. Open Systems Check.') : '';
+  const tested = ps ? (ps.ok ? `✓ Sentry tested this screen: ${ps.pressed} buttons, ${ps.links} links.` : '✗ Self-check found a problem here. Tap the Sentry light.') : '';
   const wasOpen = g.querySelector('details')?.open;
   g.innerHTML = `<details ${wasOpen ? 'open' : ''}><summary><span class="g-ico" aria-hidden="true">?</span><span class="g-line">${justTapped ? `<strong>${esc(justTapped.label)}</strong> — ${esc(justTapped.what)}` : `<strong>${esc(title)}:</strong> ${esc(line)}`}</span></summary>
     <div class="g-body">${tested ? `<p class="note">${tested}</p>` : ''}<p class="note">Everything you can tap on this screen right now:</p><ul class="g-list"></ul></div></details>`;
@@ -319,22 +344,22 @@ function reportHTML(res) {
   const ico = { ok: '✓', warn: '!', fail: '✗' };
   return `
   <div class="card sc-summary sc-${res.status}">
-    <div class="sc-big"><span class="sc-dot" aria-hidden="true"></span><div><strong>${LIGHT[res.status][1]}</strong><br><span>${res.ok} of ${res.total} checks passed${res.warn ? ` · ${res.warn} note${res.warn === 1 ? '' : 's'}` : ''}${res.fail ? ` · ${res.fail} problem${res.fail === 1 ? '' : 's'}` : ''}</span></div></div>
+    <div class="sc-big"><span class="sc-dot" aria-hidden="true"></span><div><strong>${LIGHT[res.status][1]}</strong><br><span>${res.ok} of ${res.total} checks passed${res.list.filter((x) => x.fixed).length ? ` · ${res.list.filter((x) => x.fixed).length} fixed itself` : ''}${res.warn ? ` · ${res.warn} note${res.warn === 1 ? '' : 's'}` : ''}${res.fail ? ` · ${res.fail} problem${res.fail === 1 ? '' : 's'}` : ''}</span></div></div>
     <p class="note" style="margin:8px 0 0">Checked ${new Date(res.at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' })} in ${(res.ms / 1000).toFixed(1)} s${res.fullAt ? ` · last full button test ${new Date(res.fullAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}` : ''}${res.version ? ` · ${esc(res.version)}` : ''}</p>
   </div>
   ${res.list.filter((x) => x.status !== 'ok').length ? `<h2>Needs attention</h2><ul class="sc-list">${res.list.filter((x) => x.status !== 'ok').sort((a, b) => (a.status === b.status ? 0 : a.status === 'fail' ? -1 : 1)).map((x) => `<li class="sc-${x.status}"><span class="sc-i">${ico[x.status]}</span><div><strong>${esc(x.label)}</strong><br><span class="note">${esc(x.detail)}</span></div></li>`).join('')}</ul>` : ''}
   ${groups.map((gname) => { const xs = res.list.filter((x) => x.group === gname); const bad = xs.filter((x) => x.status !== 'ok').length; return `
   <details class="card sc-group"><summary><strong>${gname}</strong> <span class="note">${xs.length - bad}/${xs.length} passed</span></summary>
-    <ul class="sc-list">${xs.map((x) => `<li class="sc-${x.status}"><span class="sc-i">${ico[x.status]}</span><div>${esc(x.label)}${x.detail ? `<br><span class="note">${esc(x.detail)}</span>` : ''}</div></li>`).join('')}</ul></details>`; }).join('')}`;
+    <ul class="sc-list">${xs.map((x) => `<li class="sc-${x.status}${x.fixed ? ' sc-fixed' : ''}"><span class="sc-i">${x.fixed ? '⚙' : ico[x.status]}</span><div>${esc(x.label)}${x.detail ? `<br><span class="note">${esc(x.detail)}</span>` : ''}</div></li>`).join('')}</ul></details>`; }).join('')}`;
 }
 function plainReport(res) {
-  return [`Colorado No2 Systems Check — ${new Date(res.at).toString()}`, `${res.ok}/${res.total} passed, ${res.warn} notes, ${res.fail} problems, ${(res.ms / 1000).toFixed(1)} s, ${res.version}`, navigator.userAgent, '',
+  return [`Colorado No2 Sentry report — ${new Date(res.at).toString()}`, `${res.ok}/${res.total} passed, ${res.warn} notes, ${res.fail} problems, ${(res.ms / 1000).toFixed(1)} s, ${res.version}`, navigator.userAgent, '',
     ...res.list.map((x) => `[${x.status.toUpperCase()}] ${x.group}: ${x.label}${x.detail ? ' — ' + x.detail : ''}`)].join('\n');
 }
 export function renderCheck() {
   main.innerHTML = `
-  <div class="page-title"><h1>Systems Check</h1><span class="stamp">SELF-TEST</span></div>
-  <p class="lede">No2 checks itself the way a car’s computer does. It opens every screen, presses every safe button, follows every link, asks the Library every question and makes sure every file is saved for offline.</p>
+  <div class="page-title"><h1>Sentry</h1><span class="stamp">ON GUARD</span></div>
+  <p class="lede">Sentry is No2’s built-in mechanic. Like a car’s computer, it checks itself every time No2 opens and fixes what it can. It opens every screen, presses every safe button, follows every link, asks the Library every question and makes sure every file is saved for offline.</p>
   <div class="card" id="sc-run"><p><strong>Running the full check…</strong> <span id="sc-step" class="note"></span></p><div class="sc-bar"><span id="sc-fill"></span></div></div>
   <div id="sc-report"></div>
   <div class="btn-row"><button class="btn red" data-selfcheck="run">Run it again</button><button class="btn ghost" data-selfcheck="copy">Copy the report</button></div>
@@ -357,6 +382,7 @@ export function renderCheck() {
    ===================================================================== */
 export function start(appCtx) {
   ctx = appCtx;
+  window.__no2Sentry = { run, lastResult };
   if (IN_TEST) return;
   paintLight(lastResult());
   onResult(paintLight);
@@ -370,8 +396,13 @@ export function start(appCtx) {
   const boot = async () => {
     const res = await run();
     if (screenName(location.hash) === 'check') return;
-    if (res.fail) toast(`Self-check: ${res.fail} problem${res.fail === 1 ? '' : 's'} found. Tap the light at the top to see.`);
-    if (res.version && res.version !== res.fullVersion && navigator.onLine) setTimeout(() => run({ full: true }).then((r) => { if (r.fail) toast('Self-check found a problem. Tap the light at the top to see.'); paintGuide(); }), 1500);
+    if (res.fail) toast(`Sentry: ${res.fail} problem${res.fail === 1 ? '' : 's'} found. Tap the light at the top to see.`);
+    if (res.version && res.version !== res.fullVersion && navigator.onLine) setTimeout(() => run({ full: true }).then((r) => { if (r.fail) toast('Sentry found a problem. Tap the light at the top to see.'); paintGuide(); }), 1500);
   };
+  // Coming back to No2 after a while: check again
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && Date.now() - ((lastResult() || {}).at || 0) > 5 * 60 * 1000) run().then((r) => { if (r.fail) toast(`Sentry: ${r.fail} problem${r.fail === 1 ? '' : 's'} found. Tap the light at the top to see.`); });
+  });
+  window.addEventListener('online', () => run());
   if (document.readyState === 'complete') setTimeout(boot, 300); else window.addEventListener('load', () => setTimeout(boot, 300), { once: true });
 }

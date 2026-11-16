@@ -322,7 +322,7 @@ function renderMore() {
     ['#/sponsors', 'Sponsors', 'Support No2. Three levels.'],
     ['#/account', 'My Account', 'Sign in, nickname, verification, your deals.'],
     ['#/settings', 'Settings and Install', 'Put No2 on your home screen.'],
-    ['#/check', 'Systems Check', 'No2 tests every screen, button and link, and tells you what it found.'],
+    ['#/check', 'Sentry', 'No2’s self-check. Tests every screen, button and link, fixes what it can, and tells you.'],
     ['for-jason/No2-Explainer.pdf', 'What is No2? (one-page guide)', 'A short, plain guide to every screen. Opens a PDF.'],
   ];
   if (st.admin) links.push(['#/admin', 'No2 Staff', 'Verify members, read sponsor requests, add events and ranges.']);

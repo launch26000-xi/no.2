@@ -14,7 +14,8 @@ Education comes first; the members' Trading Post is second. No Google Play Store
 - **Deals**: Offer, Counter, Lock It In, Meet at a gun shop (gun listings), Meet and Inspect, Deal Done, 1–5 star ratings and reviews; "Use Caution" after 3+ ratings of 2 stars or less
 - **Messages**: private member-to-member chat with safety tips
 - **Suggestion Box**: "The Best Thing Worth Saying" contest; credit or anonymous; one vote per verified member; ranked by votes
-- **Systems Check** (the gauge light in the top bar): No2 tests itself like a car's computer. Every launch it checks the phone, the offline files, all content, and asks the Library every one of its own questions. After each new version (and whenever you open Systems Check) it also opens every screen in a hidden copy of the app, presses every safe button, follows every link, and pings every outside source. Green = all good, yellow = notes, red = problem. "Copy the report" gives a plain-text report to send to whoever fixes No2. It never presses sign in/out, install, post, send or clear.
+- **Sentry** (the gauge light in the top bar): No2's built-in mechanic. Every time No2 opens, comes back on screen, or gets signal back, it checks the phone, the offline files, all content, and asks the Library every one of its own questions. It **fixes what it can by itself**: reloads a missing font, restarts the offline helper, re-saves missing offline files, deletes old versions, removes damaged saved data. After each new version (and whenever you tap the light) it also opens every screen in a hidden copy of the app, presses every safe button, follows every link, and pings every outside source. Green = all good, yellow = notes, red = problem. "Copy the report" gives a plain-text report. It never presses sign in/out, install, post, send or clear.
+- **Sentry on GitHub** (`.github/workflows/sentry.yml`, `tests/sentry.cjs`): the same full check runs on GitHub's computers on every push and every day, and proves self-repair works by breaking things on purpose. A red run means something broke; GitHub emails the owner.
 - **Guide strip** (above every screen): one line on what the screen is for; tap it to list every button on the screen and what it does. When you tap something, the strip says what you just did.
 - **Newsletter**, **Sponsors** ($50 / $150 / $300 and a request form), **Events and Ranges**, **My Account**, **No2 Staff** page
 
@@ -24,7 +25,7 @@ and `firestore.rules` is published in the Firebase console. Staff are added by c
 in the `admins` collection whose ID is the member's user ID.
 
 ## Files
-- `index.html`, `css/`, `js/app.js` (shell + education screens), `js/live.js` (member screens), `js/members.js` (database calls), `js/selfcheck.js` (Systems Check + guide), `js/map.js`, `js/ui.js`
+- `index.html`, `css/`, `js/app.js` (shell + education screens), `js/live.js` (member screens), `js/members.js` (database calls), `js/selfcheck.js` (Sentry + guide), `js/map.js`, `js/ui.js`
 - `js/content/` — lessons, laws, Library, reading list, places
 - `js/vendor/` — Firebase and Leaflet, bundled from npm by `tools/firebase-bundle` (`npm install && npm run build`)
 - `firestore.rules` — database safety rules; `tests/` — rules tests and the end-to-end member flow test (run with the Firebase emulators)
