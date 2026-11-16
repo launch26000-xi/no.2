@@ -8,6 +8,7 @@ import {
 } from './ui.js';
 import * as live from './live.js';
 import * as members from './members.js';
+import * as selfcheck from './selfcheck.js';
 
 /* ---------- Device detection ---------- */
 const ua = navigator.userAgent || '';
@@ -38,6 +39,7 @@ const ROUTES = {
   account: { art: 'eagle', render: live.renderAccount, tab: 'more' },
   admin: { art: 'bell', render: live.renderAdmin, tab: 'more' },
   settings: { art: 'stars2', render: renderSettings, tab: 'more' },
+  check: { art: 'stars2', render: selfcheck.renderCheck, tab: 'more' },
 };
 
 let cleanup = null;
@@ -55,6 +57,7 @@ function route() {
   r.render(rest.length ? decodeURIComponent(rest.join('/')) : null, new URLSearchParams(query), setCleanup);
   if (route.started) { window.scrollTo(0, 0); main.focus({ preventScroll: true }); }
   route.started = true;
+  window.dispatchEvent(new CustomEvent('no2:routed', { detail: { name } }));
 }
 window.addEventListener('hashchange', route);
 /* Tapping the menu button for the screen you're on refreshes it */
@@ -182,10 +185,11 @@ function searchLibrary(q) {
   let best = null; let bestScore = 0;
   for (const e of LIBRARY) {
     let s = 0;
+    const qWords = e.q.toLowerCase().replace(/[^a-z0-9\- ]/g, ' ').split(/\s+/);
     for (const w of words) {
       if (e.keys.includes(w)) s += 2;
-      else if (e.keys.some((k) => k.length > 3 && (k.startsWith(w) || w.startsWith(k)))) s += 1;
-      if (e.q.toLowerCase().includes(w)) s += 1;
+      else if (w.length > 3 && e.keys.some((k) => k.length > 3 && (k.startsWith(w) || w.startsWith(k)))) s += 1;
+      if (qWords.includes(w)) s += 1; // whole words only, so "car" no longer matches "carry"
     }
     if (s > bestScore) { bestScore = s; best = e; }
   }
@@ -318,6 +322,7 @@ function renderMore() {
     ['#/sponsors', 'Sponsors', 'Support No2. Three levels.'],
     ['#/account', 'My Account', 'Sign in, nickname, verification, your deals.'],
     ['#/settings', 'Settings and Install', 'Put No2 on your home screen.'],
+    ['#/check', 'Systems Check', 'No2 tests every screen, button and link, and tells you what it found.'],
     ['for-jason/No2-Explainer.pdf', 'What is No2? (one-page guide)', 'A short, plain guide to every screen. Opens a PDF.'],
   ];
   if (st.admin) links.push(['#/admin', 'No2 Staff', 'Verify members, read sponsor requests, add events and ranges.']);
@@ -393,7 +398,8 @@ function renderSettings() {
 
 /* ---------- Start ---------- */
 $('#mini-logo').innerHTML = logoSVG('mini');
+selfcheck.start({ routes: Object.keys(ROUTES), searchLibrary });
 route();
 members.onChange(() => { const n = location.hash.replace(/^#\/?/, '').split(/[/?]/)[0]; if (n === 'more') renderMore(); });
 if (members.isConfigured()) members.start().catch(() => {});
-if ('serviceWorker' in navigator) window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
+if ('serviceWorker' in navigator && !selfcheck.IN_TEST) window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
